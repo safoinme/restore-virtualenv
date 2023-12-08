@@ -1,61 +1,53 @@
-import * as cache from '@actions/cache'
-import * as core from '@actions/core'
-import * as exec from '@actions/exec'
-import * as path from 'path'
-import * as utils from './utils'
+import * as core from '@actions/core';
+import * as exec from '@actions/exec';
+import * as path from 'path';
+import * as utils from './utils';
+import * as tar from 'tar';
+import * as fs from 'fs';
 
 async function run(): Promise<void> {
   try {
-    const requirement_files = core.getInput('requirement_files', {
-      required: true
-    })
-    const custom_cache_key = core.getInput('custom_cache_key_element', {
-      required: true
-    })
-    const custom_virtualenv_dir = core.getInput('custom_virtualenv_dir', {
-      required: true
-    })
+    const requirementFiles = core.getInput('requirement_files', { required: true });
+    const customCacheKey = core.getInput('custom_cache_key_element', { required: true });
+    const customVirtualenvDir = core.getInput('custom_virtualenv_dir', { required: true });
 
-    const virtualenv_dir = await utils.virtualenv_directory(
-      custom_virtualenv_dir
-    )
-    core.saveState('VIRTUALENV_DIRECTORY', virtualenv_dir)
-    core.setOutput('virtualenv-directory', virtualenv_dir)
+    const virtualenvDir = await utils.virtualenv_directory(customVirtualenvDir);
+    core.saveState('VIRTUALENV_DIRECTORY', virtualenvDir);
+    core.setOutput('virtualenv-directory', virtualenvDir);
 
-    const cache_key = await utils.cache_key(requirement_files, custom_cache_key)
+    const cacheKey = await utils.cache_key(requirementFiles, customCacheKey);
+    core.saveState('VIRTUALENV_CACHE_KEY', cacheKey);
+    core.info(`cache key: ${cacheKey}`);
+    core.info(`directory to cache: ${virtualenvDir}`);
 
-    core.saveState('VIRTUALENV_CACHE_KEY', cache_key)
-    core.info(`cache key: ${cache_key}`)
-    core.info(`directory to cache: ${virtualenv_dir}`)
+    const tarballPath = path.join('/caching', `${cacheKey}.tar`);
 
-    const matched_key = await cache.restoreCache(
-      [virtualenv_dir],
-      cache_key,
-      []
-    )
-    core.saveState('VIRTUALENV_CACHE_MATCHED_KEY', matched_key)
+    if (fs.existsSync(tarballPath)) {
+      await tar.extract({
+        file: tarballPath,
+        cwd: process.cwd(),
+      });
 
-    if (!matched_key) {
-      core.info('Cache not found. creating new virtualenv') // eslint-disable-line i18n-text/no-en
-      core.setOutput('cache-hit', false.toString())
-
-      await exec.exec('python', ['-m', 'venv', virtualenv_dir])
+      core.info(`Cache restored from key: ${cacheKey}`);
+      core.setOutput('cache-hit', true.toString());
     } else {
-      core.info(`Cache restored from key: ${matched_key}`) // eslint-disable-line i18n-text/no-en
-      core.setOutput('cache-hit', true.toString())
+      core.info('Cache not found. creating new virtualenv');
+      core.setOutput('cache-hit', false.toString());
+
+      await exec.exec('python', ['-m', 'venv', virtualenvDir]);
     }
 
     // do what venv/bin/activate normally does
-    core.exportVariable('VIRTUAL_ENV', virtualenv_dir)
+    core.exportVariable('VIRTUAL_ENV', virtualenvDir);
 
     if (process.platform === 'win32') {
-      core.addPath(`${virtualenv_dir}${path.sep}Scripts`)
+      core.addPath(`${virtualenvDir}${path.sep}Scripts`);
     } else {
-      core.addPath(`${virtualenv_dir}${path.sep}bin`)
+      core.addPath(`${virtualenvDir}${path.sep}bin`);
     }
   } catch (error) {
-    core.setFailed((error as Error).message)
+    core.setFailed((error as Error).message);
   }
 }
 
-run()
+run();

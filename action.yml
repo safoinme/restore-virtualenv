@@ -1,7 +1,7 @@
 ---
-name: 'restore or create a python virtualenv'
+name: 'fork of restore or create a python virtualenv'
 description: '1-liner to restore and activate a cached virtualenv, or create a new one.'
-author: 'syphar'
+author: 'forked from syphar by safoinme'
 runs:
   using: 'node16'
   main: 'dist/restore/index.js'
